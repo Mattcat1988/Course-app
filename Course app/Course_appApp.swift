@@ -9,9 +9,13 @@ import SwiftUI
 
 @main
 struct Course_appApp: App {
+    @StateObject private var parser = ExchangeRateParser() // Создаём один экземпляр на всё приложение
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(parser: parser)
+                .frame(width: 300, height: 400) // Фиксируем размер окна
         }
+        .windowResizability(.contentSize) // Запрет изменения размера окна
     }
 }
