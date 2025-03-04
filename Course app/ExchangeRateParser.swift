@@ -1,12 +1,11 @@
 import SwiftUI
 import Foundation
 
-@MainActor
 class ExchangeRateParser: NSObject, XMLParserDelegate, ObservableObject {
     @Published var exchangeRates: [String: Double] = [:]
     @Published var previousRates: [String: Double] = [:]
     @Published var lastUpdated: String = ""
-    @Published var exchangeHistory: [String: [String: Double]] = [:] // История курсов
+    @Published var exchangeHistory: [String: [String: Double]] = [:]
 
     let currencyNames: [String: String] = [
         "USD": "Доллар США",
@@ -19,23 +18,47 @@ class ExchangeRateParser: NSObject, XMLParserDelegate, ObservableObject {
         "TRY": "Турецкая лира",
         "INR": "Индийская рупия",
     ]
-
+    
     private var currentCurrencyCode: String?
     private var currentValue: String = ""
 
     func fetchExchangeRates() {
         guard let url = URL(string: "https://www.cbr.ru/scripts/XML_daily.asp") else { return }
 
-        URLSession.shared.dataTask(with: url) { data, response, error in
-            guard let data = data, error == nil else {
+        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+            guard let self = self, let data = data, error == nil else {
                 print("Ошибка загрузки: \(error?.localizedDescription ?? "Unknown error")")
                 return
             }
 
-            Task {
+            Task { @MainActor in
                 await self.parse(data: data)
             }
         }.resume()
+    }
+    
+    func saveHistoryToJSON() {
+        let fileURL = getDocumentsDirectory().appendingPathComponent("exchangeHistory.json")
+        do {
+            let jsonData = try JSONEncoder().encode(exchangeHistory)
+            try jsonData.write(to: fileURL)
+        } catch {
+            print("Ошибка сохранения истории курсов: \(error)")
+        }
+    }
+
+    func loadHistoryFromJSON() {
+        let fileURL = getDocumentsDirectory().appendingPathComponent("exchangeHistory.json")
+        do {
+            let jsonData = try Data(contentsOf: fileURL)
+            exchangeHistory = try JSONDecoder().decode([String: [String: Double]].self, from: jsonData)
+        } catch {
+            print("Ошибка загрузки истории курсов: \(error)")
+        }
+    }
+
+    private func getDocumentsDirectory() -> URL {
+        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
     }
 
     func parse(data: Data) async {
@@ -75,7 +98,6 @@ class ExchangeRateParser: NSObject, XMLParserDelegate, ObservableObject {
                     }
                     self.exchangeRates[currency] = rate
 
-                    // Сохраняем в историю курсов
                     let date = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .none)
                     if self.exchangeHistory[date] == nil {
                         self.exchangeHistory[date] = [:]
@@ -92,19 +114,16 @@ class ExchangeRateParser: NSObject, XMLParserDelegate, ObservableObject {
         }
     }
 
-    // Функция прогнозирования курса
     func predictFutureRates(for currency: String, daysAhead: Int = 7) -> [String: Double] {
         let sortedHistory = exchangeHistory
             .compactMapValues { $0[currency] }
             .sorted(by: { $0.key < $1.key })
 
         let history = sortedHistory.map { $0.value }
-
         guard history.count > 1 else { return [:] }
 
         let x = (0..<history.count).map { Double($0) }
         let y = history
-
         let n = Double(x.count)
         let sumX = x.reduce(0, +)
         let sumY = y.reduce(0, +)

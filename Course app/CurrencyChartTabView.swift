@@ -27,9 +27,16 @@ struct CurrencyChartTabView: View {
             }
         }
         .onAppear {
-            if selectedCurrency.isEmpty || !availableCurrencies.contains(selectedCurrency) {
-                selectedCurrency = availableCurrencies.first ?? "USD" // Дефолтная валюта
-            }
+            updateSelectedCurrency()
+        }
+        .onChange(of: parser.exchangeRates) {
+            updateSelectedCurrency()
+        }
+    }
+
+    private func updateSelectedCurrency() {
+        if selectedCurrency.isEmpty || !availableCurrencies.contains(selectedCurrency) {
+            selectedCurrency = availableCurrencies.first ?? "USD"
         }
     }
 }
