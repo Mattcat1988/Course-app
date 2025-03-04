@@ -1,10 +1,3 @@
-//
-//  Course_appApp.swift
-//  Course app
-//
-//  Created by 1234 on 26.02.2025.
-//
-
 import SwiftUI
 
 @main
@@ -14,8 +7,8 @@ struct Course_appApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(parser: parser)
-                .frame(width: 300, height: 400) // Фиксируем размер окна
+                .frame(minWidth: 400, minHeight: 400) // Минимальный размер окна
         }
-        .windowResizability(.contentSize) // Запрет изменения размера окна
+        .windowResizability(.contentSize)
     }
 }

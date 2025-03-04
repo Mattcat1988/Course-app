@@ -2,38 +2,27 @@ import SwiftUI
 import Charts
 
 struct CurrencyChartView: View {
-    let currency: String
-    let history: [String: Double]
+    var currency: String
+    var history: [String: Double]
 
     var body: some View {
         VStack {
-            Text("Динамика курса \(currency)")
-                .font(.headline)
-
-            Chart {
-                ForEach(sortedHistory(), id: \.0) { date, value in
-                    LineMark(
-                        x: .value("Дата", date),
-                        y: .value("Курс", value)
-                    )
+            if history.isEmpty {
+                Text("Нет данных для отображения графика")
+                    .foregroundColor(.gray)
+                    .padding()
+            } else {
+                Chart {
+                    ForEach(history.sorted(by: { $0.key < $1.key }), id: \.key) { entry in
+                        LineMark(
+                            x: .value("Дата", entry.key), // Передача даты как строки
+                            y: .value("Курс", entry.value)
+                        )
+                    }
                 }
+                .frame(height: 300)
+                .padding()
             }
-            .frame(height: 200)
-            .padding()
         }
-    }
-
-    // 🔹 Сортировка и конвертация дат
-    private func sortedHistory() -> [(Date, Double)] {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "dd.MM.yyyy"
-
-        return history.compactMap { (dateString, value) in
-            if let date = formatter.date(from: dateString) {
-                return (date, value)
-            }
-            return nil
-        }
-        .sorted { $0.0 < $1.0 }
     }
 }

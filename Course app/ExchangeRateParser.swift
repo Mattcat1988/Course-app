@@ -1,10 +1,12 @@
 import SwiftUI
 import Foundation
 
+@MainActor
 class ExchangeRateParser: NSObject, XMLParserDelegate, ObservableObject {
     @Published var exchangeRates: [String: Double] = [:]
     @Published var previousRates: [String: Double] = [:]
     @Published var lastUpdated: String = ""
+    @Published var exchangeHistory: [String: [String: Double]] = [:] // История курсов
 
     let currencyNames: [String: String] = [
         "USD": "Доллар США",
@@ -39,6 +41,7 @@ class ExchangeRateParser: NSObject, XMLParserDelegate, ObservableObject {
     func parse(data: Data) async {
         let formatter = DateFormatter()
         formatter.dateFormat = "dd.MM.yyyy HH:mm"
+        
         DispatchQueue.main.async {
             self.lastUpdated = "Обновлено: \(formatter.string(from: Date()))"
         }
@@ -71,6 +74,13 @@ class ExchangeRateParser: NSObject, XMLParserDelegate, ObservableObject {
                         self.previousRates[currency] = previousRate
                     }
                     self.exchangeRates[currency] = rate
+
+                    // Сохраняем в историю курсов
+                    let date = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .none)
+                    if self.exchangeHistory[date] == nil {
+                        self.exchangeHistory[date] = [:]
+                    }
+                    self.exchangeHistory[date]?[currency] = rate
                 }
             }
         }
@@ -80,5 +90,41 @@ class ExchangeRateParser: NSObject, XMLParserDelegate, ObservableObject {
         DispatchQueue.main.async {
             self.objectWillChange.send()
         }
+    }
+
+    // Функция прогнозирования курса
+    func predictFutureRates(for currency: String, daysAhead: Int = 7) -> [String: Double] {
+        let sortedHistory = exchangeHistory
+            .compactMapValues { $0[currency] }
+            .sorted(by: { $0.key < $1.key })
+
+        let history = sortedHistory.map { $0.value }
+
+        guard history.count > 1 else { return [:] }
+
+        let x = (0..<history.count).map { Double($0) }
+        let y = history
+
+        let n = Double(x.count)
+        let sumX = x.reduce(0, +)
+        let sumY = y.reduce(0, +)
+        let sumXY = zip(x, y).map(*).reduce(0, +)
+        let sumX2 = x.map { $0 * $0 }.reduce(0, +)
+
+        let slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)
+        let intercept = (sumY - slope * sumX) / n
+
+        var futureRates: [String: Double] = [:]
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd.MM.yyyy"
+
+        for i in 1...daysAhead {
+            let futureDate = Calendar.current.date(byAdding: .day, value: i, to: Date())!
+            let futureDateString = formatter.string(from: futureDate)
+            let predictedValue = intercept + slope * Double(history.count + i)
+            futureRates[futureDateString] = predictedValue
+        }
+
+        return futureRates
     }
 }
